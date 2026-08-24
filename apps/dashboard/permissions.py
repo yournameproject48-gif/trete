@@ -1,5 +1,6 @@
 from functools import wraps
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect
 from django.core.exceptions import PermissionDenied
 from django.utils.decorators import method_decorator
 
@@ -10,8 +11,9 @@ def can_access_dashboard(user):
 
 def dashboard_required(view_func):
     @wraps(view_func)
-    @login_required
     def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('dashboard:login')
         if not can_access_dashboard(request.user):
             raise PermissionDenied('ليست لديك صلاحية الدخول إلى لوحة التحكم.')
         return view_func(request, *args, **kwargs)

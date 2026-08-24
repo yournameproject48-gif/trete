@@ -24,6 +24,7 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
     <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 
     {% block extra_css %}{% endblock %}
 </head>
@@ -48,6 +49,7 @@
 
     <!-- ملف JS المخصص -->
     <script src="{% static 'js/app.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script><script src="{% static 'js/leaflet-map.js' %}"></script>
 
     {% block extra_js %}{% endblock %}
 </body>
