@@ -73,6 +73,24 @@ class DashboardAccessTests(TestCase):
         for i in range(20): User.objects.create_user(username=f'u{i}', email=f'u{i}@e.com', password='pass')
         self.assertContains(self.client.get(reverse('dashboard:users'), {'page':2}), 'u')
 
+    def test_catalog_pages_use_their_actual_order_field_and_manage_records(self):
+        self.client.login(username='admin', password='pass')
+        managed = self.client.get(reverse('dashboard:managed_services'))
+        self.assertContains(managed, self.managed.name)
+        self.assertNotContains(managed, 'display_order')
+        categories = self.client.get(reverse('dashboard:categories'))
+        self.assertContains(categories, self.category.name)
+        self.assertContains(categories, '0')
+        response = self.client.post(reverse('dashboard:catalog_action', kwargs={'slug': 'managed_services', 'pk': self.managed.pk, 'action_name': 'toggle'}))
+        self.assertRedirects(response, reverse('dashboard:managed_services'))
+        self.managed.refresh_from_db(); self.assertFalse(self.managed.is_active)
+
+    def test_verification_list_renders_database_request_and_document(self):
+        self.client.login(username='admin', password='pass')
+        response = self.client.get(reverse('dashboard:verification'))
+        self.assertContains(response, self.provider_user.username)
+        self.assertContains(response, self.doc_type.name)
+
     def test_global_search_is_grouped_and_admin_only(self):
         self.client.login(username='customer', password='pass')
         self.assertEqual(self.client.get(reverse('dashboard:global_search'), {'q': 'خدمة'}).status_code, 403)
@@ -120,3 +138,15 @@ class DashboardActionTests(DashboardAccessTests):
         self.payment.refresh_from_db(); self.assertEqual(self.payment.status, Payment.STATUS_REFUNDED)
         self.assertEqual(self.client.post(reverse('dashboard:review_action', args=[self.order.review.pk if hasattr(self.order, 'review') else 999, 'hide']), {'reason':'اختبار'}).status_code if hasattr(self.order, 'review') else 404, 404)
         self.assertEqual(self.client.get(reverse('dashboard:export', args=['users'])).status_code, 200)
+
+    def test_super_admin_can_create_manager_with_group_permissions(self):
+        super_admin = User.objects.create_user(username='root-admin', email='root@example.com', password='pass', role='super_admin', is_staff=True)
+        self.client.login(username='root-admin', password='pass')
+        from django.contrib.auth.models import Group
+        group = Group.objects.create(name='مراجعة التوثيق')
+        response = self.client.post(reverse('dashboard:manager_create'), {'username': 'new-admin', 'email': 'new-admin@example.com', 'role': 'admin', 'is_active': 'on', 'password': 'secure-pass-123', 'groups': [group.pk]})
+        self.assertRedirects(response, reverse('dashboard:admin_users'))
+        created = User.objects.get(username='new-admin')
+        self.assertTrue(created.is_staff)
+        self.assertTrue(created.check_password('secure-pass-123'))
+        self.assertTrue(created.groups.filter(pk=group.pk).exists())

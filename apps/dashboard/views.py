@@ -17,7 +17,7 @@ from apps.marketplace.models import Category, Service, ManagedService, Specializ
 from apps.orders.models import Order
 from apps.payments.models import Payment, CommissionRecord, Wallet, ProviderWallet
 from apps.reviews.models import Review
-from .forms import (UserAdminForm, ProviderAdminForm, ReasonActionForm, OptionalReasonActionForm, VerificationDecisionForm, DocumentReviewForm, CategoryForm, ServiceForm, ProviderServiceForm, OrderStatusForm, NotificationForm, CityForm, DistrictForm, ManagedServiceForm, SpecializationForm, QualificationForm, WalletForm, TermsForm, GroupForm)
+from .forms import (UserAdminForm, ManagerForm, ProviderAdminForm, ReasonActionForm, OptionalReasonActionForm, VerificationDecisionForm, DocumentReviewForm, CategoryForm, ServiceForm, ProviderServiceForm, OrderStatusForm, NotificationForm, CityForm, DistrictForm, ManagedServiceForm, SpecializationForm, QualificationForm, WalletForm, TermsForm, GroupForm)
 from .permissions import dashboard_required
 from .services.statistics import platform_statistics, provider_statistics
 from .services import actions
@@ -249,7 +249,7 @@ def verification_list(request):
     qs=ProviderVerificationRequest.objects.select_related('provider__user','reviewed_by').prefetch_related('requested_services','documents__document_type')
     qs=_search(qs,request.GET.get('q'),['provider__user__username','provider__user__email','provider__display_name','provider__business_name'])
     if request.GET.get('status'): qs=qs.filter(status=request.GET['status'])
-    return render(request,'dashboard/verification/list.html',{**_common(request,'إدارة التوثيق'),'page_obj':_paginate(request,qs.order_by('-created_at')),'status_choices':ProviderVerificationRequest.STATUS_CHOICES,'tabs':ProviderProfile.VERIFICATION_STATUS_CHOICES})
+    return render(request,'dashboard/verification/list.html',{**_common(request,'إدارة التوثيق'),'page_obj':_paginate(request,qs.order_by('-submitted_at', '-created_at')),'status_choices':ProviderVerificationRequest.STATUS_CHOICES,'tabs':ProviderProfile.VERIFICATION_STATUS_CHOICES})
 
 @dashboard_required
 def verification_detail(request, pk):
@@ -455,6 +455,25 @@ def export_view(request, kind):
 @dashboard_required
 def admin_users(request):
     return render(request,'dashboard/admins/list.html',{**_common(request,'المديرون والصلاحيات'),'admins':User.objects.filter(Q(is_staff=True)|Q(role__in=['admin','super_admin'])),'groups':Group.objects.prefetch_related('permissions').all(),'permissions':Permission.objects.select_related('content_type')[:300]})
+
+def _require_super_admin(request):
+    if not (request.user.is_superuser or request.user.role == 'super_admin'):
+        raise PermissionDenied('إدارة حسابات المديرين متاحة للمدير العام فقط.')
+
+@dashboard_required
+def manager_edit(request, pk=None):
+    _require_super_admin(request)
+    manager = get_object_or_404(User, pk=pk, role__in=['admin', 'super_admin']) if pk else None
+    if request.method == 'POST':
+        form = ManagerForm(request.POST, instance=manager)
+        if form.is_valid():
+            saved = form.save()
+            actions.audit(request, 'manager_saved', saved, new={'role': saved.role, 'groups': list(saved.groups.values_list('name', flat=True))})
+            messages.success(request, 'تم حفظ المدير وصلاحياته.')
+            return redirect('dashboard:admin_users')
+    else:
+        form = ManagerForm(instance=manager)
+    return render(request, 'dashboard/form.html', {**_common(request, 'إدارة مدير'), 'form': form, 'submit_label': 'حفظ المدير'})
 @dashboard_required
 def group_edit(request, pk=None):
     group=get_object_or_404(Group, pk=pk) if pk else None
@@ -473,8 +492,35 @@ def manage_model_page(request, slug, title, model, form_class):
         messages.error(request,'تعذر حفظ البيانات.')
     else: form=form_class(instance=instance)
     qs=model.objects.all()
+    if model is Category:
+        qs=qs.annotate(services_count=Count('services', distinct=True))
     if request.GET.get('q') and hasattr(model,'name'): qs=_search(qs,request.GET.get('q'),['name'])
-    return render(request,'dashboard/settings/model_list.html',{**_common(request,title),'page_obj':_paginate(request,qs),'form':form,'object_name':title,'edit_obj':instance})
+    order_field = 'display_order' if model is Wallet else 'order'
+    return render(request,'dashboard/settings/model_list.html',{**_common(request,title),'page_obj':_paginate(request,qs.order_by(order_field, 'name')),'form':form,'object_name':title,'edit_obj':instance,'order_field':order_field,'is_category':model is Category})
+
+@dashboard_required
+@require_POST
+def catalog_action(request, slug, pk, action_name):
+    models = {'categories': Category, 'managed_services': ManagedService, 'specializations': Specialization, 'qualifications': Qualification, 'cities': City, 'districts': District, 'wallets': Wallet}
+    model = models.get(slug)
+    if not model:
+        raise Http404('قسم غير مدعوم')
+    obj = get_object_or_404(model, pk=pk)
+    if action_name == 'toggle' and hasattr(obj, 'is_active'):
+        obj.is_active = not obj.is_active
+        obj.save(update_fields=['is_active', 'updated_at'])
+        actions.audit(request, f'{slug}_status_changed', obj, new={'is_active': obj.is_active})
+        messages.success(request, 'تم تحديث حالة العنصر.')
+    elif action_name == 'delete':
+        if isinstance(obj, Category) and (obj.services.exists() or obj.subcategories.exists()):
+            messages.error(request, 'لا يمكن حذف تصنيف مرتبط بخدمات أو تصنيفات فرعية. عطّله أو انقل العلاقات أولاً.')
+        else:
+            actions.audit(request, f'{slug}_deleted', obj)
+            obj.delete()
+            messages.success(request, 'تم حذف العنصر.')
+    else:
+        messages.error(request, 'إجراء غير مدعوم.')
+    return redirect(f'dashboard:{slug}')
 
 @dashboard_required
 def cities(request): return manage_model_page(request,'cities','المدن',City,CityForm)
