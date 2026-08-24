@@ -46,6 +46,14 @@ class DashboardAccessTests(TestCase):
         self.client.login(username='admin', password='pass')
         self.assertEqual(self.client.get(reverse('dashboard:index')).status_code, 200)
 
+    def test_dashboard_login_is_separate_and_rejects_customer(self):
+        response = self.client.get(reverse('dashboard:index'))
+        self.assertRedirects(response, reverse('dashboard:login'))
+        response = self.client.post(reverse('dashboard:login'), {'username': 'customer', 'password': 'pass'})
+        self.assertContains(response, 'لا يملك صلاحية')
+        response = self.client.post(reverse('dashboard:login'), {'username': 'admin', 'password': 'pass'})
+        self.assertRedirects(response, reverse('dashboard:index'))
+
     def test_lists_search_filters_and_details(self):
         self.client.login(username='admin', password='pass')
         for name in ['users','providers','verification','services','orders','payments','reviews','cities','districts','specializations','qualifications','wallets','commissions','settings']:

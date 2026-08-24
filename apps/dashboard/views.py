@@ -2,6 +2,8 @@ import csv
 from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.auth import login as auth_login
+from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.paginator import Paginator
@@ -18,7 +20,7 @@ from apps.orders.models import Order
 from apps.payments.models import Payment, CommissionRecord, Wallet, ProviderWallet
 from apps.reviews.models import Review
 from .forms import (UserAdminForm, ManagerForm, ProviderAdminForm, ReasonActionForm, OptionalReasonActionForm, VerificationDecisionForm, DocumentReviewForm, CategoryForm, ServiceForm, ProviderServiceForm, OrderStatusForm, NotificationForm, CityForm, DistrictForm, ManagedServiceForm, SpecializationForm, QualificationForm, WalletForm, TermsForm, GroupForm)
-from .permissions import dashboard_required
+from .permissions import can_access_dashboard, dashboard_required
 from .services.statistics import platform_statistics, provider_statistics
 from .services import actions
 
@@ -534,3 +536,14 @@ def specializations(request): return manage_model_page(request,'specializations'
 def qualifications(request): return manage_model_page(request,'qualifications','المؤهلات',Qualification,QualificationForm)
 @dashboard_required
 def settings_view(request): return terms_view(request)
+def dashboard_login(request):
+    if request.user.is_authenticated and can_access_dashboard(request.user):
+        return redirect('dashboard:index')
+    form = AuthenticationForm(request, data=request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        user = form.get_user()
+        if can_access_dashboard(user):
+            auth_login(request, user)
+            return redirect(request.POST.get('next') or 'dashboard:index')
+        form.add_error(None, 'هذا الحساب لا يملك صلاحية الدخول إلى لوحة الإدارة.')
+    return render(request, 'dashboard/login.html', {'form': form, 'page_title': 'دخول الإدارة'})

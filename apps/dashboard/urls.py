@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 app_name='dashboard'
 urlpatterns=[
+    path('login/', views.dashboard_login, name='login'),
     path('', views.index, name='index'),
     path('search/', views.global_search, name='global_search'),
     path('users/', views.users_list, name='users'), path('users/customers/', views.users_list, {'role':'customer'}, name='customers'), path('users/providers/', views.users_list, {'role':'provider'}, name='provider_users'), path('users/create/', views.user_create, name='user_create'), path('users/<int:pk>/', views.user_detail, name='user_detail'), path('users/<int:pk>/edit/', views.user_edit, name='user_edit'), path('users/<int:pk>/<str:action_name>/', views.user_action, name='user_action'), path('users/bulk/', views.users_bulk_action, name='users_bulk'),

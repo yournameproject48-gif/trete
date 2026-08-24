@@ -12,9 +12,14 @@
     var map = element._serviceMarketplaceMap;
     if (!map) {
       map = L.map(element, {scrollWheelZoom: true}).setView([point.lat, point.lng], options.zoom || 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
+      });
+      var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19, attribution: 'Tiles &copy; Esri'
+      });
+      streets.addTo(map);
+      L.control.layers({'الخريطة': streets, 'القمر الصناعي': satellite}, null, {position: 'topleft'}).addTo(map);
       element._serviceMarketplaceMap = map;
     } else map.setView([point.lat, point.lng], options.zoom || map.getZoom());
     var marker = element._serviceMarketplaceMarker;
