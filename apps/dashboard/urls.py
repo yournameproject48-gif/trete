@@ -3,6 +3,7 @@ from . import views
 app_name='dashboard'
 urlpatterns=[
     path('', views.index, name='index'),
+    path('search/', views.global_search, name='global_search'),
     path('users/', views.users_list, name='users'), path('users/customers/', views.users_list, {'role':'customer'}, name='customers'), path('users/providers/', views.users_list, {'role':'provider'}, name='provider_users'), path('users/create/', views.user_create, name='user_create'), path('users/<int:pk>/', views.user_detail, name='user_detail'), path('users/<int:pk>/edit/', views.user_edit, name='user_edit'), path('users/<int:pk>/<str:action_name>/', views.user_action, name='user_action'), path('users/bulk/', views.users_bulk_action, name='users_bulk'),
     path('providers/', views.providers_list, name='providers'), path('providers/<int:pk>/', views.provider_detail, name='provider_detail'), path('providers/<int:pk>/edit/', views.provider_edit, name='provider_edit'), path('providers/<int:pk>/<str:action_name>/', views.provider_action, name='provider_action'),
     path('verification/', views.verification_list, name='verification'), path('verification/<int:pk>/', views.verification_detail, name='verification_detail'), path('verification/<int:pk>/decision/', views.verification_decision, name='verification_decision'),

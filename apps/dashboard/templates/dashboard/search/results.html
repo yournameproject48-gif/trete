@@ -1,0 +1,26 @@
+{% extends 'dashboard/base.html' %}
+{% block content %}
+<div class="panel">
+  <form class="filters" method="get"><input class="form-control" name="q" value="{{ query }}" minlength="2" placeholder="بحث شامل في المنصة..."><button class="btn btn-primary">بحث</button></form>
+  {% if too_short %}<p class="text-warning mb-0">أدخل حرفين على الأقل لبدء البحث.</p>{% elif query %}
+    <h2>نتائج البحث عن «{{ query }}»</h2>
+    {% for label, records in results.items %}
+      <section class="mb-4"><h3 class="h6">{{ label }}</h3><div class="list-group">
+      {% for record in records %}
+        {% if label == 'المستخدمون' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:user_detail' record.pk %}">{{ record.get_full_name|default:record.username }} <small class="text-muted">{{ record.email }}</small></a>
+        {% elif label == 'مقدمو الخدمات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:provider_detail' record.pk %}">{{ record.display_name|default:record.business_name|default:record.user.username }}</a>
+        {% elif label == 'الطلبات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:order_detail' record.order_number %}">#{{ record.order_number }} — {{ record.title }}</a>
+        {% elif label == 'طلبات التوثيق' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:verification_detail' record.pk %}">{{ record.provider.user.username }} — {{ record.get_status_display }}</a>
+        {% elif label == 'المستندات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:document_detail' record.pk %}">{{ record.document_type.name }} — {{ record.provider.user.username }}</a>
+        {% elif label == 'المدفوعات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:payment_detail' record.pk %}">#{{ record.transaction_id|default:record.pk }} — {{ record.order.order_number }}</a>
+        {% elif label == 'خدمات مقدمي الخدمات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:provider_services' %}?q={{ query|urlencode }}">{{ record }}</a>
+        {% elif label == 'الخدمات الأساسية' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:managed_services' %}?q={{ query|urlencode }}">{{ record.name }}</a>
+        {% elif label == 'العمولات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:commissions' %}?q={{ query|urlencode }}">{{ record.order.order_number }}</a>
+        {% elif label == 'التقييمات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:reviews' %}?q={{ query|urlencode }}">{{ record.customer.username }} — {{ record.service.title }}</a>
+        {% elif label == 'المدن والمديريات' %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:cities' %}?q={{ query|urlencode }}">{{ record }}</a>
+        {% else %}<a class="list-group-item list-group-item-action" href="{% url 'dashboard:services' %}?q={{ query|urlencode }}">{{ record }}</a>{% endif %}
+      {% endfor %}</div></section>
+    {% empty %}<p class="text-muted mb-0">لا توجد نتائج مطابقة.</p>{% endfor %}
+  {% else %}<p class="text-muted mb-0">ابحث في المستخدمين ومقدمي الخدمات والخدمات والطلبات والمدفوعات والتوثيق والمستندات والمواقع.</p>{% endif %}
+</div>
+{% endblock %}

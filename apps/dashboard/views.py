@@ -81,6 +81,64 @@ def index(request):
     return render(request,'dashboard/dashboard.html',ctx)
 
 @dashboard_required
+def global_search(request):
+    """Bounded, grouped administrative search across the platform's primary records."""
+    query = request.GET.get('q', '').strip()
+    results = {}
+    if len(query) >= 2:
+        results = {
+            'المستخدمون': User.objects.filter(
+                Q(username__icontains=query) | Q(email__icontains=query) |
+                Q(first_name__icontains=query) | Q(last_name__icontains=query)
+            ).select_related('location_city')[:10],
+            'مقدمو الخدمات': ProviderProfile.objects.filter(
+                Q(user__username__icontains=query) | Q(user__email__icontains=query) |
+                Q(display_name__icontains=query) | Q(business_name__icontains=query)
+            ).select_related('user', 'location_city')[:10],
+            'الخدمات': Service.objects.filter(
+                Q(title__icontains=query) | Q(category__name__icontains=query) |
+                Q(provider__username__icontains=query)
+            ).select_related('provider', 'category')[:10],
+            'الطلبات': Order.objects.filter(
+                Q(order_number__icontains=query) | Q(title__icontains=query) |
+                Q(customer__username__icontains=query) | Q(provider__username__icontains=query)
+            ).select_related('customer', 'provider')[:10],
+            'طلبات التوثيق': ProviderVerificationRequest.objects.filter(
+                Q(provider__user__username__icontains=query) |
+                Q(provider__display_name__icontains=query)
+            ).select_related('provider__user')[:10],
+            'المستندات': ProviderDocument.objects.filter(
+                Q(provider__user__username__icontains=query) |
+                Q(document_type__name__icontains=query)
+            ).select_related('provider__user', 'document_type')[:10],
+            'المدفوعات': Payment.objects.filter(
+                Q(transaction_id__icontains=query) | Q(order__order_number__icontains=query)
+            ).select_related('order')[:10],
+            'خدمات مقدمي الخدمات': ProviderService.objects.filter(
+                Q(provider__user__username__icontains=query) | Q(service__title__icontains=query) |
+                Q(catalog_service__name__icontains=query)
+            ).select_related('provider__user', 'service', 'catalog_service')[:10],
+            'الخدمات الأساسية': ManagedService.objects.filter(
+                Q(name__icontains=query) | Q(category__name__icontains=query)
+            ).select_related('category')[:10],
+            'العمولات': CommissionRecord.objects.filter(
+                Q(order__order_number__icontains=query) | Q(order__provider__username__icontains=query)
+            ).select_related('order', 'order__provider')[:10],
+            'التقييمات': Review.objects.filter(
+                Q(comment__icontains=query) | Q(customer__username__icontains=query) |
+                Q(provider__username__icontains=query) | Q(service__title__icontains=query)
+            ).select_related('customer', 'provider', 'service', 'order')[:10],
+            'المدن والمديريات': list(City.objects.filter(name__icontains=query)[:10]) + list(
+                District.objects.filter(Q(name__icontains=query) | Q(city__name__icontains=query)).select_related('city')[:10]
+            ),
+        }
+        results = {label: records for label, records in results.items() if records}
+    return render(request, 'dashboard/search/results.html', {
+        **_common(request, 'نتائج البحث الشامل'), 'query': query, 'results': results,
+        'too_short': bool(query) and len(query) < 2,
+    })
+
+@dashboard_required
 def users_list(request, role=None):
     qs=User.objects.select_related('location_city','location_district')
     if role: qs=qs.filter(role=role)
@@ -113,7 +171,15 @@ def user_edit(request, pk):
 @dashboard_required
 def user_detail(request, pk):
     user=get_object_or_404(User.objects.select_related('location_city','location_district'), pk=pk)
-    ctx={**_common(request,'تفاصيل المستخدم'),'user_obj':user,'orders_as_customer':Order.objects.filter(customer=user).select_related('provider','service')[:30],'orders_as_provider':Order.objects.filter(provider=user).select_related('customer','service')[:30],'reviews_given':Review.objects.filter(customer=user).select_related('provider','service','order')[:30],'reviews_received':Review.objects.filter(provider=user).select_related('customer','service','order')[:30],'notifications_list':Notification.objects.filter(recipient=user)[:30],'audits':AuditLog.objects.filter(actor=user)[:30]}
+    provider = None
+    if user.role == 'provider':
+        provider = ProviderProfile.objects.filter(user=user).select_related(
+            'location_city', 'location_district'
+        ).prefetch_related('specializations', 'qualification_choices', 'documents__document_type', 'wallet_accounts__wallet').first()
+    audit_filter = Q(actor=user)
+    if provider:
+        audit_filter |= Q(object_id=str(provider.pk))
+    ctx={**_common(request,'تفاصيل المستخدم'),'user_obj':user,'provider':provider,'provider_stats':provider_statistics(provider) if provider else None,'orders_as_customer':Order.objects.filter(customer=user).select_related('provider','service')[:30],'orders_as_provider':Order.objects.filter(provider=user).select_related('customer','service')[:30],'reviews_given':Review.objects.filter(customer=user).select_related('provider','service','order')[:30],'reviews_received':Review.objects.filter(provider=user).select_related('customer','service','order')[:30],'notifications_list':Notification.objects.filter(recipient=user)[:30],'audits':AuditLog.objects.filter(audit_filter)[:30]}
     return render(request,'dashboard/users/detail.html',ctx)
 
 @dashboard_required
@@ -134,11 +200,16 @@ def user_action(request, pk, action_name):
 @dashboard_required
 @require_POST
 def users_bulk_action(request):
-    ids=request.POST.getlist('ids'); action=request.POST.get('action'); updated=0
+    ids=request.POST.getlist('ids'); action=request.POST.get('action'); updated=0; failures=[]
     for user in User.objects.filter(pk__in=ids):
-        try: actions.update_user_status(request,user,action,request.POST.get('reason','إجراء جماعي')); updated+=1
-        except Exception: pass
-    messages.success(request, f'تم تنفيذ الإجراء على {updated} مستخدم.')
+        try:
+            actions.update_user_status(request,user,action,request.POST.get('reason','إجراء جماعي')); updated+=1
+        except (ValidationError, PermissionDenied) as exc:
+            failures.append(f'{user.username}: {exc.messages[0] if hasattr(exc, "messages") else str(exc)}')
+    if updated:
+        messages.success(request, f'نجح تنفيذ الإجراء على {updated} مستخدم.')
+    if failures:
+        messages.error(request, 'فشل تنفيذ الإجراء على %d مستخدم: %s' % (len(failures), '؛ '.join(failures)))
     return redirect('dashboard:users')
 
 @dashboard_required

@@ -136,7 +136,9 @@ class Review(models.Model):
     
     def get_absolute_url(self):
         """رابط صفحة التقييم"""
-        return reverse('reviews:review_detail', kwargs={'pk': self.pk})
+        # There is no public review-detail route; the existing edit route is
+        # the canonical object page and enforces ownership in its view.
+        return reverse('reviews:review_update', kwargs={'pk': self.pk})
     
     @property
     def can_be_edited(self):
