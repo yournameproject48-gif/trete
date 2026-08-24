@@ -1,4 +1,5 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.template.context import BaseContext, Context, RequestContext
 from django.urls import reverse
@@ -11,8 +12,8 @@ Context.__copy__ = _safe_context_copy
 RequestContext.__copy__ = _safe_context_copy
 
 from apps.accounts.models import User, ProviderDocument, ProviderDocumentType, ProviderVerificationRequest
-from apps.core.models import City, District, TermsAndConditions
-from apps.marketplace.models import Category, ManagedService, Service, Specialization, Qualification
+from apps.core.models import City, District, TermsAndConditions, Notification
+from apps.marketplace.models import Category, ManagedService, Service, Specialization, Qualification, ProviderService
 from apps.orders.models import Order
 from apps.payments.models import Wallet, ProviderWallet, Payment
 
@@ -71,6 +72,30 @@ class DashboardAccessTests(TestCase):
         self.assertEqual(TermsAndConditions.objects.get(version='v1').commission_rate, 15)
         for i in range(20): User.objects.create_user(username=f'u{i}', email=f'u{i}@e.com', password='pass')
         self.assertContains(self.client.get(reverse('dashboard:users'), {'page':2}), 'u')
+
+    def test_global_search_is_grouped_and_admin_only(self):
+        self.client.login(username='customer', password='pass')
+        self.assertEqual(self.client.get(reverse('dashboard:global_search'), {'q': 'خدمة'}).status_code, 403)
+        self.client.login(username='admin', password='pass')
+        response = self.client.get(reverse('dashboard:global_search'), {'q': 'خدمة'})
+        self.assertContains(response, 'الخدمات')
+        self.assertContains(response, 'خدمة حقيقية')
+
+    def test_bulk_action_reports_a_protected_user_failure(self):
+        self.client.login(username='admin', password='pass')
+        response = self.client.post(reverse('dashboard:users_bulk'), {
+            'ids': [str(self.admin.pk), str(self.customer.pk)], 'action': 'deactivate', 'reason': 'تنظيف',
+        }, follow=True)
+        self.admin.refresh_from_db(); self.customer.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+        self.assertFalse(self.customer.is_active)
+        self.assertContains(response, 'فشل تنفيذ الإجراء')
+
+    def test_notification_events_and_provider_service_constraint(self):
+        self.assertIn('admin_message', dict(Notification.EVENT_CHOICES))
+        invalid = ProviderService(provider=self.provider, price=10)
+        with self.assertRaises(ValidationError):
+            invalid.full_clean()
 
 class DashboardActionTests(DashboardAccessTests):
     def test_admin_can_manage_user_provider_document_review_and_notification(self):

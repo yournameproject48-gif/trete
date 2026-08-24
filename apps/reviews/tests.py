@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.urls import reverse
 from django.core.exceptions import ValidationError
 from apps.accounts.models import User
 from apps.marketplace.models import Category, Service
@@ -14,3 +15,12 @@ class ReviewIntegrityTests(TestCase):
         review=Review(order=order,customer=c,provider=p,service=svc,service_rating=5,provider_rating=5,comment='Great')
         with self.assertRaises(ValidationError):
             review.full_clean()
+
+    def test_absolute_url_uses_existing_owner_edit_route(self):
+        c=User.objects.create_user(username='url-c',email='url-c@example.com',password='x',role='customer')
+        p=User.objects.create_user(username='url-p',email='url-p@example.com',password='x',role='provider')
+        cat=Category.objects.create(name='URL category')
+        svc=Service.objects.create(provider=p,category=cat,title='URL service',description='x',price=10,delivery_time=1,status='active')
+        order=Order.objects.create(customer=c,provider=p,service=svc,title='URL order',description='x',agreed_price=10,delivery_days=1,status=Order.STATUS_COMPLETED)
+        review=Review.objects.create(order=order,customer=c,provider=p,service=svc,service_rating=5,provider_rating=5,comment='OK')
+        self.assertEqual(review.get_absolute_url(), reverse('reviews:review_update', args=[review.pk]))
