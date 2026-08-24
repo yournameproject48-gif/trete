@@ -74,7 +74,7 @@ class PlatformSetting(models.Model):
     def __str__(self): return self.key
 
 class Notification(models.Model):
-    EVENT_CHOICES=[('provider_submitted','Provider submitted'),('provider_verified','Provider verified'),('provider_rejected','Provider rejected'),('documents_requested','Documents requested'),('new_order','New order'),('order_accepted','Order accepted'),('order_rejected','Order rejected'),('payment_successful','Payment successful'),('payment_failed','Payment failed'),('order_started','Order started'),('order_delivered','Order delivered'),('order_completed','Order completed'),('new_review','New review')]
+    EVENT_CHOICES=[('provider_submitted','Provider submitted'),('provider_verified','Provider verified'),('provider_rejected','Provider rejected'),('documents_requested','Documents requested'),('new_order','New order'),('order_accepted','Order accepted'),('order_rejected','Order rejected'),('payment_successful','Payment successful'),('payment_failed','Payment failed'),('order_started','Order started'),('order_delivered','Order delivered'),('order_completed','Order completed'),('new_review','New review'),('commission_accepted','Commission accepted'),('payment_proof_uploaded','Payment proof uploaded'),('account_status_changed','Account status changed'),('admin_message','Admin message')]
     recipient=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='notifications')
     event_type=models.CharField(max_length=40, choices=EVENT_CHOICES, db_index=True)
     title=models.CharField(max_length=200)

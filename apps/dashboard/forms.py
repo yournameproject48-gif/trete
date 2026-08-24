@@ -26,6 +26,36 @@ class UserAdminForm(DashboardModelForm):
         model = User
         fields = ['username','first_name','last_name','email','phone','role','is_active','is_staff','location_city','location_district']
 
+class ManagerForm(DashboardModelForm):
+    password = forms.CharField(label='كلمة المرور', required=False, widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+    groups = forms.ModelMultipleChoiceField(label='الأدوار والصلاحيات', queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': 'form-select'}))
+
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email', 'phone', 'role', 'is_active', 'groups']
+
+    def clean_role(self):
+        role = self.cleaned_data['role']
+        if role not in {'admin', 'super_admin'}:
+            raise forms.ValidationError('يمكن إنشاء حساب مدير أو مدير عام فقط من هذه الصفحة.')
+        return role
+
+    def clean_password(self):
+        password = self.cleaned_data['password']
+        if not self.instance.pk and not password:
+            raise forms.ValidationError('كلمة المرور مطلوبة للمدير الجديد.')
+        return password
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.is_staff = True
+        if self.cleaned_data.get('password'):
+            user.set_password(self.cleaned_data['password'])
+        if commit:
+            user.save()
+            self.save_m2m()
+        return user
+
 class ProviderAdminForm(DashboardModelForm):
     class Meta:
         model = ProviderProfile

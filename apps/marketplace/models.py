@@ -334,10 +334,17 @@ class ProviderService(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['provider', 'service'], condition=models.Q(service__isnull=False), name='unique_provider_listing_service'),
             models.UniqueConstraint(fields=['provider', 'catalog_service'], condition=models.Q(catalog_service__isnull=False), name='unique_provider_catalog_service'),
+            models.CheckConstraint(
+                check=(models.Q(service__isnull=False, catalog_service__isnull=True) |
+                       models.Q(service__isnull=True, catalog_service__isnull=False)),
+                name='provider_service_exactly_one_source',
+            ),
         ]
         indexes=[models.Index(fields=['service','is_active']), models.Index(fields=['provider','is_active'])]
     def clean(self):
         from django.core.exceptions import ValidationError
+        if bool(self.service_id) == bool(self.catalog_service_id):
+            raise ValidationError('اختر خدمة سوق أو خدمة أساسية واحدة فقط.')
         if self.catalog_service_id and not self.catalog_service.is_active:
             raise ValidationError('الخدمة المختارة غير نشطة أو لم تعد متاحة.')
         if not (self.provider.status == 'active' and self.provider.verification_status == 'verified'):
