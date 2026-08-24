@@ -190,8 +190,7 @@
 </div>
 {% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'vendor/leaflet/leaflet.js' %}"></script><script>(function(){const el=document.getElementById('public-provider-map');if(!el||!window.ServiceMarketplaceOfflineMap)return;const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);if(Number.isFinite(lat)&&Number.isFinite(lng)){window.ServiceMarketplaceOfflineMap(el,{initial:{lat,lng},readonly:true});}})();</script>
+<script>(function(){const el=document.getElementById('public-provider-map');if(!el||!window.ServiceMarketplaceOfflineMap)return;const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);if(Number.isFinite(lat)&&Number.isFinite(lng)){window.ServiceMarketplaceOfflineMap(el,{initial:{lat,lng},readonly:true});}})();</script>
 {% endblock %}
